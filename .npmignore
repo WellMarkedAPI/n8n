@@ -1,0 +1,13 @@
+# Source files don't ship to npm — n8n only loads the compiled dist/.
+.github/
+.vscode/
+.idea/
+node_modules/
+credentials/
+nodes/
+tsconfig.json
+gulpfile.js
+*.log
+.DS_Store
+.editorconfig
+.eslintrc*

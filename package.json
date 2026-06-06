@@ -1,0 +1,68 @@
+{
+  "name": "n8n-nodes-wellmarked",
+  "version": "0.1.1",
+  "description": "n8n community node for the WellMarked API — convert any URL to clean Markdown.",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "wellmarked",
+    "markdown",
+    "scraping",
+    "extraction",
+    "html-to-markdown",
+    "rag",
+    "llm"
+  ],
+  "license": "MIT",
+  "homepage": "https://wellmarked.io",
+  "author": {
+    "name": "WellMarked",
+    "email": "support@wellmarked.io",
+    "url": "https://wellmarked.io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WellMarkedAPI/WellMarked.git",
+    "directory": "n8n-nodes-wellmarked"
+  },
+  "main": "index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.15"
+  },
+  "scripts": {
+    "build": "npm run build:clean && tsc && npm run build:icons",
+    "build:clean": "rimraf dist",
+    "build:icons": "gulp build:icons",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/WellMarkedApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/WellMarked/WellMarked.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "gulp": "^5.0.0",
+    "n8n-workflow": "*",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.4.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
