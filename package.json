@@ -54,7 +54,7 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^25.9.2",
     "gulp": "^5.0.0",
     "n8n-workflow": "*",
     "rimraf": "^5.0.5",
