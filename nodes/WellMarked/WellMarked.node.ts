@@ -220,7 +220,7 @@ export class WellMarked implements INodeType {
 				typeOptions: { minValue: 0 },
 				default: 1,
 				description:
-					'Maximum BFS depth to follow from the root URL. Pro and Growth are capped at 5; Enterprise is unlimited.',
+					'Maximum BFS depth to follow from the root URL. Pro is capped at 5, Growth at 10; Enterprise is unlimited.',
 				displayOptions: {
 					show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] },
 				},

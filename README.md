@@ -48,7 +48,7 @@ For batches of URLs (Pro and Growth: up to 50 per job; Enterprise: unlimited).
 
 ### Crawl Job
 
-Same three operations against `POST /crawl` / `GET /crawl/{job_id}`. Plan caps: Pro is depth ≤ 5 and ≤ 2,000 pages (1 concurrent); Growth is depth ≤ 5 and ≤ 10,000 pages (3 concurrent); Enterprise is unlimited (8 concurrent).
+Same three operations against `POST /crawl` / `GET /crawl/{job_id}`. Plan caps: Pro is depth ≤ 5 and ≤ 2,000 pages; Growth is depth ≤ 10 and ≤ 10,000 pages; Enterprise is unlimited. Each crawl job fetches up to 8 pages concurrently.
 
 - **Submit and Wait** fans results out as one item per page.
 - The output items include `depth` (BFS distance from the root) and the `truncated` / `truncated_reason` fields when the crawl stopped early.
@@ -74,7 +74,7 @@ This node does **not yet** expose a `Webhook URL` field on the Submit operations
 3. The first response carries `webhook_signing_secret` (shown once — store it as an n8n credential or env var).
 4. In the webhook trigger's downstream flow, verify `X-WellMarked-Signature` against your stored secret before acting on the payload.
 
-See the [WellMarked Webhooks docs](https://github.com/WellMarkedAPI/WellMarked#webhooks) for the signature scheme, retry policy, and payload shape.
+See the [WellMarked Webhooks docs](https://wellmarked.io/docs#webhooks) for the signature scheme, retry policy, and payload shape.
 
 ## Errors
 
@@ -85,8 +85,8 @@ The per-second rate limit (Free 5/s · Pro 20/s · Growth 100/s · Enterprise un
 ## Development
 
 ```bash
-git clone https://github.com/WellMarkedAPI/WellMarked.git
-cd WellMarked/n8n-nodes-wellmarked
+git clone https://github.com/WellMarkedAPI/n8n.git
+cd n8n
 npm install
 npm run build         # compiles to dist/ and copies icons
 npm link              # makes the package globally linkable
@@ -101,7 +101,7 @@ npm link n8n-nodes-wellmarked
 
 Copyright © 2026 WellMarked. Released under the [MIT License](LICENSE).
 
-Source: <https://github.com/WellMarkedAPI/WellMarked/tree/master/n8n-nodes-wellmarked>
+Source: <https://github.com/WellMarkedAPI/n8n>
 
 Use of the hosted API at `api.wellmarked.io` remains subject to the
 [Terms of Service](https://wellmarked.io/terms).
