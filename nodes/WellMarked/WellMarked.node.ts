@@ -21,6 +21,14 @@ const CREDENTIALS_NAME = 'wellMarkedApi';
 // only NARROW the API key's own policy server-side, never widen it. Grouped in
 // a collection so they stay out of the way until a user opts in — an override
 // left unset is simply omitted from the request body.
+const FORMAT_OPTIONS = [
+	{ name: 'Markdown', value: 'markdown', description: 'Clean prose (default)' },
+	{ name: 'JSON Blocks', value: 'json', description: 'Typed heading/paragraph/list/code blocks' },
+	{ name: 'Chunks', value: 'chunks', description: 'Contiguous 500-token windows for embedding' },
+	{ name: 'Raw HTML', value: 'html', description: 'The raw fetched HTML' },
+	{ name: 'Links', value: 'links', description: 'Every http(s) link on the page' },
+];
+
 const COMPLIANCE_OPTIONS: INodeProperties[] = [
 	{
 		displayName: 'Allow Domains',
@@ -149,6 +157,15 @@ export class WellMarked implements INodeType {
 				displayOptions: { show: { resource: ['extract'], operation: ['extractUrl'] } },
 			},
 			{
+				displayName: 'Output Format',
+				name: 'format',
+				type: 'options',
+				default: 'markdown',
+				options: FORMAT_OPTIONS,
+				description: 'Which representation of the page to return',
+				displayOptions: { show: { resource: ['extract'], operation: ['extractUrl'] } },
+			},
+			{
 				displayName: 'Compliance Overrides',
 				name: 'compliance',
 				type: 'collection',
@@ -211,6 +228,15 @@ export class WellMarked implements INodeType {
 				displayOptions: {
 					show: { resource: ['bulk'], operation: ['submit', 'submitAndWait'] },
 				},
+			},
+			{
+				displayName: 'Output Format',
+				name: 'format',
+				type: 'options',
+				default: 'markdown',
+				options: FORMAT_OPTIONS,
+				description: 'Which representation of the page to return',
+				displayOptions: { show: { resource: ['bulk'], operation: ['getStatus'] } },
 			},
 			{
 				displayName: 'Compliance Overrides',
@@ -295,6 +321,15 @@ export class WellMarked implements INodeType {
 				displayOptions: {
 					show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] },
 				},
+			},
+			{
+				displayName: 'Output Format',
+				name: 'format',
+				type: 'options',
+				default: 'markdown',
+				options: FORMAT_OPTIONS,
+				description: 'Which representation of the page to return',
+				displayOptions: { show: { resource: ['crawl'], operation: ['getStatus'] } },
 			},
 			{
 				displayName: 'Compliance Overrides',
@@ -418,12 +453,13 @@ export class WellMarked implements INodeType {
 				if (resource === 'extract' && operation === 'extractUrl') {
 					const url = this.getNodeParameter('url', i) as string;
 					const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
+					const format = this.getNodeParameter('format', i, 'markdown') as string;
 					const body = await request.call(
 						this,
 						i,
 						'POST',
 						'/extract',
-						{ url, render_js: renderJs, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
+						{ url, render_js: renderJs, format, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
 					);
 					out.push({ json: body as IDataObject, pairedItem: { item: i } });
 					continue;
@@ -440,12 +476,13 @@ export class WellMarked implements INodeType {
 							);
 						}
 						const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
+						const format = this.getNodeParameter('format', i, 'markdown') as string;
 						const submitted = (await request.call(
 							this,
 							i,
 							'POST',
 							'/bulk',
-							{ urls, render_js: renderJs, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
+							{ urls, render_js: renderJs, format, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
 							{ 'Idempotency-Key': newIdempotencyKey() },
 						)) as JobResponse;
 
@@ -472,12 +509,13 @@ export class WellMarked implements INodeType {
 						const url = this.getNodeParameter('url', i) as string;
 						const depth = this.getNodeParameter('depth', i, 1) as number;
 						const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
+						const format = this.getNodeParameter('format', i, 'markdown') as string;
 						const submitted = (await request.call(
 							this,
 							i,
 							'POST',
 							'/crawl',
-							{ url, depth, render_js: renderJs, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
+							{ url, depth, render_js: renderJs, format, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
 							{ 'Idempotency-Key': newIdempotencyKey() },
 						)) as JobResponse;
 
