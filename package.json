@@ -42,6 +42,7 @@
     "build:icons": "gulp build:icons",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
   "n8n": {
@@ -58,7 +59,8 @@
     "gulp": "^5.0.0",
     "n8n-workflow": "*",
     "rimraf": "^5.0.5",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "n8n-workflow": "*"
