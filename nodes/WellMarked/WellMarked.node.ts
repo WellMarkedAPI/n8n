@@ -23,8 +23,8 @@ const CREDENTIALS_NAME = 'wellMarkedApi';
 // left unset is simply omitted from the request body.
 const FORMAT_OPTIONS = [
 	{ name: 'Markdown', value: 'markdown', description: 'Clean prose (default)' },
-	{ name: 'JSON Blocks', value: 'json', description: 'Typed heading/paragraph/list/code blocks' },
-	{ name: 'Chunks', value: 'chunks', description: 'Contiguous 500-token windows for embedding' },
+	{ name: 'JSON Blocks', value: 'json', description: 'Typed heading/paragraph/list/code blocks (Pro+ plans)' },
+	{ name: 'Chunks', value: 'chunks', description: 'Contiguous 500-token windows for embedding (Pro+ plans)' },
 	{ name: 'Raw HTML', value: 'html', description: 'The raw fetched HTML' },
 	{ name: 'Links', value: 'links', description: 'Every http(s) link on the page' },
 ];
@@ -395,6 +395,24 @@ export class WellMarked implements INodeType {
 					'Whether to render each result page with Playwright before extracting (paid plans only)',
 				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
 			},
+			{
+				displayName: 'Output Format',
+				name: 'format',
+				type: 'options',
+				default: 'markdown',
+				options: FORMAT_OPTIONS,
+				description: 'Which representation to return for every extracted result',
+				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
+			},
+			{
+				displayName: 'Compliance Overrides',
+				name: 'compliance',
+				type: 'collection',
+				placeholder: 'Add Override',
+				default: {},
+				options: COMPLIANCE_OPTIONS,
+				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
+			},
 
 			// ── Wait options (shared by bulk + crawl "Submit and Wait") ───────
 			{
@@ -541,12 +559,19 @@ export class WellMarked implements INodeType {
 					const query = this.getNodeParameter('query', i) as string;
 					const numResults = this.getNodeParameter('numResults', i, 5) as number;
 					const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
+					const format = this.getNodeParameter('format', i, 'markdown') as string;
 					const body = (await request.call(
 						this,
 						i,
 						'POST',
 						'/search',
-						{ query, num_results: numResults, render_js: renderJs },
+						{
+							query,
+							num_results: numResults,
+							render_js: renderJs,
+							format,
+							...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject),
+						},
 					)) as IDataObject;
 
 					// Fan each result out to its own item (like bulk/crawl "Submit
