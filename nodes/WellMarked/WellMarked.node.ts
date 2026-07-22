@@ -166,6 +166,16 @@ export class WellMarked implements INodeType {
 				displayOptions: { show: { resource: ['extract'], operation: ['extractUrl'] } },
 			},
 			{
+				displayName: 'Retry',
+				name: 'retry',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description:
+					'Server-side re-attempts when the target times out, each on a fresh connection. 0 = one attempt. Each timed-out attempt takes 20-30s on this synchronous call — prefer Bulk for aggressive values.',
+				displayOptions: { show: { resource: ['extract'], operation: ['extractUrl'] } },
+			},
+			{
 				displayName: 'Compliance Overrides',
 				name: 'compliance',
 				type: 'collection',
@@ -236,7 +246,17 @@ export class WellMarked implements INodeType {
 				default: 'markdown',
 				options: FORMAT_OPTIONS,
 				description: 'Which representation of the page to return',
-				displayOptions: { show: { resource: ['bulk'], operation: ['getStatus'] } },
+				displayOptions: { show: { resource: ['bulk'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
+				displayName: 'Retry',
+				name: 'retry',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description:
+					'Server-side re-attempts per URL when the target times out, each on a fresh connection. 0 = one attempt.',
+				displayOptions: { show: { resource: ['bulk'], operation: ['submit', 'submitAndWait'] } },
 			},
 			{
 				displayName: 'Compliance Overrides',
@@ -329,7 +349,27 @@ export class WellMarked implements INodeType {
 				default: 'markdown',
 				options: FORMAT_OPTIONS,
 				description: 'Which representation of the page to return',
-				displayOptions: { show: { resource: ['crawl'], operation: ['getStatus'] } },
+				displayOptions: { show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
+				displayName: 'Retry',
+				name: 'retry',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description:
+					'Server-side re-attempts per page when the target times out, each on a fresh connection. 0 = one attempt.',
+				displayOptions: { show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
+				displayName: 'Max Pages',
+				name: 'maxPages',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description:
+					'Stop the crawl after this many successful pages. Can only narrow your plan\'s page cap, never widen it. 0 = plan cap alone.',
+				displayOptions: { show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] } },
 			},
 			{
 				displayName: 'Compliance Overrides',
@@ -472,12 +512,13 @@ export class WellMarked implements INodeType {
 					const url = this.getNodeParameter('url', i) as string;
 					const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
 					const format = this.getNodeParameter('format', i, 'markdown') as string;
+					const retry = this.getNodeParameter('retry', i, 0) as number;
 					const body = await request.call(
 						this,
 						i,
 						'POST',
 						'/extract',
-						{ url, render_js: renderJs, format, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
+						{ url, render_js: renderJs, format, retry, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
 					);
 					out.push({ json: body as IDataObject, pairedItem: { item: i } });
 					continue;
@@ -495,12 +536,13 @@ export class WellMarked implements INodeType {
 						}
 						const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
 						const format = this.getNodeParameter('format', i, 'markdown') as string;
+						const retry = this.getNodeParameter('retry', i, 0) as number;
 						const submitted = (await request.call(
 							this,
 							i,
 							'POST',
 							'/bulk',
-							{ urls, render_js: renderJs, format, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
+							{ urls, render_js: renderJs, format, retry, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
 							{ 'Idempotency-Key': newIdempotencyKey() },
 						)) as JobResponse;
 
@@ -528,12 +570,19 @@ export class WellMarked implements INodeType {
 						const depth = this.getNodeParameter('depth', i, 1) as number;
 						const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
 						const format = this.getNodeParameter('format', i, 'markdown') as string;
+						const retry = this.getNodeParameter('retry', i, 0) as number;
+						const maxPages = this.getNodeParameter('maxPages', i, 0) as number;
+						const body: IDataObject = {
+							url, depth, render_js: renderJs, format, retry,
+							...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject),
+						};
+						if (maxPages > 0) body.max_pages = maxPages;
 						const submitted = (await request.call(
 							this,
 							i,
 							'POST',
 							'/crawl',
-							{ url, depth, render_js: renderJs, format, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
+							body,
 							{ 'Idempotency-Key': newIdempotencyKey() },
 						)) as JobResponse;
 
