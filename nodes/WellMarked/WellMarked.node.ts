@@ -97,7 +97,7 @@ export class WellMarked implements INodeType {
 			},
 		],
 		requestDefaults: {
-			baseURL: '={{$credentials.baseUrl}}',
+			baseURL: 'https://api.wellmarked.io',
 			headers: {
 				'Content-Type': 'application/json',
 				Accept: 'application/json',

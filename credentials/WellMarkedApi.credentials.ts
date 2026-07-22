@@ -23,14 +23,6 @@ export class WellMarkedApi implements ICredentialType {
 			description:
 				'Your WellMarked API key (starts with <code>wm_</code>). Get one at https://wellmarked.io.',
 		},
-		{
-			displayName: 'Base URL',
-			name: 'baseUrl',
-			type: 'string',
-			default: 'https://api.wellmarked.io',
-			description:
-				'API base URL. Only change this if you are pointing the node at a self-hosted or staging WellMarked instance.',
-		},
 	];
 
 	// Injects `Authorization: Bearer wm_...` on every request the node makes.
@@ -48,7 +40,7 @@ export class WellMarkedApi implements ICredentialType {
 	// and does not count against the user's monthly quota.
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: '={{$credentials.baseUrl}}',
+			baseURL: 'https://api.wellmarked.io',
 			url: '/usage',
 			method: 'GET',
 		},
