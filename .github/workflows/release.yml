@@ -18,7 +18,12 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
           cache: npm
-      - run: npm ci
+      # --ignore-scripts for the same reason as ci.yml: n8n-workflow pulls in
+      # isolated-vm, a native module whose node-gyp build fails on Node 20
+      # runners. Publishing needs only tsc + gulp (prepublishOnly runs the
+      # same build), never a compiled VM. CI runs the full typecheck/test/
+      # build gauntlet on this exact install shape.
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm publish --provenance --access public
         env:
