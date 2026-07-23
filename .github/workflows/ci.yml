@@ -22,6 +22,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
+      # --ignore-scripts: n8n-workflow pulls isolated-vm, a native module whose
+      # node-gyp build fails on Node 20 runners. We only need n8n-workflow's
+      # TYPES to typecheck/test/build this node, never a compiled VM, so
+      # skipping install scripts avoids an irrelevant native compile.
+      - run: npm ci --ignore-scripts
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build

@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto';
+
 import {
 	IDataObject,
 	IExecuteFunctions,
 	IHttpRequestMethods,
 	INodeExecutionData,
+	INodeProperties,
 	INodeType,
 	INodeTypeDescription,
 	NodeApiError,
@@ -10,7 +13,53 @@ import {
 	sleep,
 } from 'n8n-workflow';
 
+import { buildPolicy, parseUrlList } from './helpers';
+
 const CREDENTIALS_NAME = 'wellMarkedApi';
+
+// Per-request compliance overrides shared by extract / bulk / crawl. These can
+// only NARROW the API key's own policy server-side, never widen it. Grouped in
+// a collection so they stay out of the way until a user opts in — an override
+// left unset is simply omitted from the request body.
+const FORMAT_OPTIONS = [
+	{ name: 'Markdown', value: 'markdown', description: 'Clean prose (default)' },
+	{ name: 'JSON Blocks', value: 'json', description: 'Typed heading/paragraph/list/code blocks (Pro+ plans)' },
+	{ name: 'Chunks', value: 'chunks', description: 'Contiguous 500-token windows for embedding (Pro+ plans)' },
+	{ name: 'Raw HTML', value: 'html', description: 'The raw fetched HTML' },
+	{ name: 'Links', value: 'links', description: 'Every http(s) link on the page' },
+];
+
+const COMPLIANCE_OPTIONS: INodeProperties[] = [
+	{
+		displayName: 'Allow Domains',
+		name: 'allow_domains',
+		type: 'string',
+		default: '',
+		placeholder: 'example.com, docs.example.com',
+		description:
+			'Comma-separated domains to restrict this request to (and their subdomains). Narrows the key policy only.',
+	},
+	{
+		displayName: 'Deny Patterns',
+		name: 'deny_patterns',
+		type: 'string',
+		default: '',
+		placeholder: '*/admin/*, */private/*',
+		description: 'Comma-separated deny globs, matched against the hostname and the full URL',
+	},
+	{
+		displayName: 'Respect Robots',
+		name: 'respect_robots',
+		type: 'options',
+		default: 'strict',
+		options: [
+			{ name: 'Strict', value: 'strict' },
+			{ name: 'Lax', value: 'lax' },
+		],
+		description:
+			'Whether to honor robots.txt on this request. Strict extends robots to extract/bulk too; can tighten but not loosen the key setting.',
+	},
+];
 
 interface JobResponse {
 	job_id: string;
@@ -48,7 +97,7 @@ export class WellMarked implements INodeType {
 			},
 		],
 		requestDefaults: {
-			baseURL: '={{$credentials.baseUrl}}',
+			baseURL: 'https://api.wellmarked.io',
 			headers: {
 				'Content-Type': 'application/json',
 				Accept: 'application/json',
@@ -65,6 +114,7 @@ export class WellMarked implements INodeType {
 					{ name: 'Extract', value: 'extract' },
 					{ name: 'Bulk Job', value: 'bulk' },
 					{ name: 'Crawl Job', value: 'crawl' },
+					{ name: 'Search', value: 'search' },
 					{ name: 'Account', value: 'account' },
 				],
 				default: 'extract',
@@ -104,6 +154,34 @@ export class WellMarked implements INodeType {
 				default: false,
 				description:
 					'Whether to render the page with Playwright before extracting (paid plans only)',
+				displayOptions: { show: { resource: ['extract'], operation: ['extractUrl'] } },
+			},
+			{
+				displayName: 'Output Format',
+				name: 'format',
+				type: 'options',
+				default: 'markdown',
+				options: FORMAT_OPTIONS,
+				description: 'Which representation of the page to return',
+				displayOptions: { show: { resource: ['extract'], operation: ['extractUrl'] } },
+			},
+			{
+				displayName: 'Retry',
+				name: 'retry',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description:
+					'Server-side re-attempts when the target times out, each on a fresh connection. 0 = one attempt. Each timed-out attempt takes 20-30s on this synchronous call — prefer Bulk for aggressive values.',
+				displayOptions: { show: { resource: ['extract'], operation: ['extractUrl'] } },
+			},
+			{
+				displayName: 'Compliance Overrides',
+				name: 'compliance',
+				type: 'collection',
+				placeholder: 'Add Override',
+				default: {},
+				options: COMPLIANCE_OPTIONS,
 				displayOptions: { show: { resource: ['extract'], operation: ['extractUrl'] } },
 			},
 
@@ -160,6 +238,34 @@ export class WellMarked implements INodeType {
 				displayOptions: {
 					show: { resource: ['bulk'], operation: ['submit', 'submitAndWait'] },
 				},
+			},
+			{
+				displayName: 'Output Format',
+				name: 'format',
+				type: 'options',
+				default: 'markdown',
+				options: FORMAT_OPTIONS,
+				description: 'Which representation of the page to return',
+				displayOptions: { show: { resource: ['bulk'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
+				displayName: 'Retry',
+				name: 'retry',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description:
+					'Server-side re-attempts per URL when the target times out, each on a fresh connection. 0 = one attempt.',
+				displayOptions: { show: { resource: ['bulk'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
+				displayName: 'Compliance Overrides',
+				name: 'compliance',
+				type: 'collection',
+				placeholder: 'Add Override',
+				default: {},
+				options: COMPLIANCE_OPTIONS,
+				displayOptions: { show: { resource: ['bulk'], operation: ['submit', 'submitAndWait'] } },
 			},
 			{
 				displayName: 'Job ID',
@@ -237,6 +343,44 @@ export class WellMarked implements INodeType {
 				},
 			},
 			{
+				displayName: 'Output Format',
+				name: 'format',
+				type: 'options',
+				default: 'markdown',
+				options: FORMAT_OPTIONS,
+				description: 'Which representation of the page to return',
+				displayOptions: { show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
+				displayName: 'Retry',
+				name: 'retry',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description:
+					'Server-side re-attempts per page when the target times out, each on a fresh connection. 0 = one attempt.',
+				displayOptions: { show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
+				displayName: 'Max Pages',
+				name: 'maxPages',
+				type: 'number',
+				default: 0,
+				typeOptions: { minValue: 0 },
+				description:
+					'Stop the crawl after this many successful pages. Can only narrow your plan\'s page cap, never widen it. 0 = plan cap alone.',
+				displayOptions: { show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
+				displayName: 'Compliance Overrides',
+				name: 'compliance',
+				type: 'collection',
+				placeholder: 'Add Override',
+				default: {},
+				options: COMPLIANCE_OPTIONS,
+				displayOptions: { show: { resource: ['crawl'], operation: ['submit', 'submitAndWait'] } },
+			},
+			{
 				displayName: 'Job ID',
 				name: 'jobId',
 				type: 'string',
@@ -244,6 +388,70 @@ export class WellMarked implements INodeType {
 				default: '',
 				description: 'The job ID returned from a previous Submit call',
 				displayOptions: { show: { resource: ['crawl'], operation: ['getStatus'] } },
+			},
+
+			// ── Search operations ─────────────────────────────────────────────
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { resource: ['search'] } },
+				options: [
+					{
+						name: 'Search',
+						value: 'search',
+						description: 'Search the web and extract each result to Markdown',
+						action: 'Search the web and extract the results',
+					},
+				],
+				default: 'search',
+			},
+			{
+				displayName: 'Query',
+				name: 'query',
+				type: 'string',
+				required: true,
+				default: '',
+				placeholder: 'best open-source vector databases',
+				description: 'The search query',
+				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
+			},
+			{
+				displayName: 'Number of Results',
+				name: 'numResults',
+				type: 'number',
+				default: 5,
+				typeOptions: { minValue: 1, maxValue: 10 },
+				description: 'How many results to fetch and extract (1–10)',
+				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
+			},
+			{
+				displayName: 'Render JavaScript',
+				name: 'renderJs',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether to render each result page with Playwright before extracting (paid plans only)',
+				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
+			},
+			{
+				displayName: 'Output Format',
+				name: 'format',
+				type: 'options',
+				default: 'markdown',
+				options: FORMAT_OPTIONS,
+				description: 'Which representation to return for every extracted result',
+				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
+			},
+			{
+				displayName: 'Compliance Overrides',
+				name: 'compliance',
+				type: 'collection',
+				placeholder: 'Add Override',
+				default: {},
+				options: COMPLIANCE_OPTIONS,
+				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
 			},
 
 			// ── Wait options (shared by bulk + crawl "Submit and Wait") ───────
@@ -303,12 +511,14 @@ export class WellMarked implements INodeType {
 				if (resource === 'extract' && operation === 'extractUrl') {
 					const url = this.getNodeParameter('url', i) as string;
 					const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
+					const format = this.getNodeParameter('format', i, 'markdown') as string;
+					const retry = this.getNodeParameter('retry', i, 0) as number;
 					const body = await request.call(
 						this,
 						i,
 						'POST',
 						'/extract',
-						{ url, render_js: renderJs },
+						{ url, render_js: renderJs, format, retry, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
 					);
 					out.push({ json: body as IDataObject, pairedItem: { item: i } });
 					continue;
@@ -325,10 +535,16 @@ export class WellMarked implements INodeType {
 							);
 						}
 						const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
-						const submitted = (await request.call(this, i, 'POST', '/bulk', {
-							urls,
-							render_js: renderJs,
-						})) as JobResponse;
+						const format = this.getNodeParameter('format', i, 'markdown') as string;
+						const retry = this.getNodeParameter('retry', i, 0) as number;
+						const submitted = (await request.call(
+							this,
+							i,
+							'POST',
+							'/bulk',
+							{ urls, render_js: renderJs, format, retry, ...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject) },
+							{ 'Idempotency-Key': newIdempotencyKey() },
+						)) as JobResponse;
 
 						if (operation === 'submit') {
 							out.push({ json: submitted as unknown as IDataObject, pairedItem: { item: i } });
@@ -353,11 +569,22 @@ export class WellMarked implements INodeType {
 						const url = this.getNodeParameter('url', i) as string;
 						const depth = this.getNodeParameter('depth', i, 1) as number;
 						const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
-						const submitted = (await request.call(this, i, 'POST', '/crawl', {
-							url,
-							depth,
-							render_js: renderJs,
-						})) as JobResponse;
+						const format = this.getNodeParameter('format', i, 'markdown') as string;
+						const retry = this.getNodeParameter('retry', i, 0) as number;
+						const maxPages = this.getNodeParameter('maxPages', i, 0) as number;
+						const body: IDataObject = {
+							url, depth, render_js: renderJs, format, retry,
+							...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject),
+						};
+						if (maxPages > 0) body.max_pages = maxPages;
+						const submitted = (await request.call(
+							this,
+							i,
+							'POST',
+							'/crawl',
+							body,
+							{ 'Idempotency-Key': newIdempotencyKey() },
+						)) as JobResponse;
 
 						if (operation === 'submit') {
 							out.push({ json: submitted as unknown as IDataObject, pairedItem: { item: i } });
@@ -375,6 +602,42 @@ export class WellMarked implements INodeType {
 						out.push({ json: body as unknown as IDataObject, pairedItem: { item: i } });
 						continue;
 					}
+				}
+
+				if (resource === 'search' && operation === 'search') {
+					const query = this.getNodeParameter('query', i) as string;
+					const numResults = this.getNodeParameter('numResults', i, 5) as number;
+					const renderJs = this.getNodeParameter('renderJs', i, false) as boolean;
+					const format = this.getNodeParameter('format', i, 'markdown') as string;
+					const body = (await request.call(
+						this,
+						i,
+						'POST',
+						'/search',
+						{
+							query,
+							num_results: numResults,
+							render_js: renderJs,
+							format,
+							...buildPolicy(this.getNodeParameter('compliance', i, {}) as IDataObject),
+						},
+					)) as IDataObject;
+
+					// Fan each result out to its own item (like bulk/crawl "Submit
+					// and Wait"), tagging it with the query so downstream nodes keep
+					// context. No results → emit the envelope so the flow still runs.
+					const results = Array.isArray(body.results) ? body.results : [];
+					if (results.length === 0) {
+						out.push({ json: body, pairedItem: { item: i } });
+					} else {
+						for (const r of results) {
+							out.push({
+								json: { query: body.query, ...(r as IDataObject) },
+								pairedItem: { item: i },
+							});
+						}
+					}
+					continue;
 				}
 
 				if (resource === 'account' && operation === 'getUsage') {
@@ -406,12 +669,25 @@ export class WellMarked implements INodeType {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+// The n8n node talks to the HTTP API directly rather than through the JS SDK
+// (n8n nodes idiomatically use n8n's own HTTP helpers), so it doesn't inherit
+// the SDK's automatic Idempotency-Key and must mint its own.
+//
+// Scoped to one submission: n8n retries a failed node by re-executing it,
+// which mints a fresh key and therefore creates a genuinely new job. That
+// matches the SDK's behaviour for a caller-level retry, and is why this only
+// protects against a replay of the same in-flight HTTP request.
+function newIdempotencyKey(): string {
+	return randomUUID();
+}
+
 async function request(
 	this: IExecuteFunctions,
 	itemIndex: number,
 	method: IHttpRequestMethods,
 	path: string,
 	body?: object,
+	headers?: Record<string, string>,
 ): Promise<unknown> {
 	try {
 		return await this.helpers.httpRequestWithAuthentication.call(this, CREDENTIALS_NAME, {
@@ -419,6 +695,7 @@ async function request(
 			url: path,
 			json: true,
 			...(body !== undefined ? { body } : {}),
+			...(headers !== undefined ? { headers } : {}),
 		});
 	} catch (err) {
 		// httpRequestWithAuthentication throws a plain Error for non-2xx —
@@ -512,17 +789,6 @@ function pushJobResults(
 
 // Accept either a string[] (from an expression) or a comma/newline-separated
 // string (from the inline UI field). Trim and drop empties.
-function parseUrlList(input: unknown): string[] {
-	if (Array.isArray(input)) {
-		return input
-			.map((v) => String(v).trim())
-			.filter((v) => v.length > 0);
-	}
-	if (typeof input === 'string') {
-		return input
-			.split(/[\n,]+/)
-			.map((v) => v.trim())
-			.filter((v) => v.length > 0);
-	}
-	return [];
-}
+// Turn the 'compliance' collection value into the request-body policy fields.
+// Only fields the user actually set are included, so an unset override never
+// overwrites the key's own policy.
