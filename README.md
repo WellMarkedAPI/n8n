@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/n8n-nodes-wellmarked.svg)](https://www.npmjs.com/package/n8n-nodes-wellmarked)
 
-Official **n8n community node** for the [WellMarked](https://wellmarked.io) API — extract clean Markdown from any URL, crawl whole sites, and run bulk jobs from inside an n8n workflow.
+Official **n8n community node** for the [WellMarked](https://wellmarked.io) API — extract clean Markdown from any URL, crawl whole sites, run bulk jobs, and search the web from inside an n8n workflow.
 
 ## Install
 
@@ -27,31 +27,39 @@ Create a **WellMarked API** credential with your `wm_...` key. Get one at [wellm
 | Field      | Description                                                                  |
 |------------|------------------------------------------------------------------------------|
 | API Key    | Your WellMarked API key (`wm_...`). Stored encrypted by n8n.                 |
-| Base URL   | Defaults to `https://api.wellmarked.io`. Change only for staging/self-host.  |
 
 ## Operations
 
 The node uses the standard n8n **Resource + Operation** model.
 
+**Output Format** and **Compliance Overrides** (Allow Domains / Deny Patterns / Respect Robots) are available on the Extract, Bulk, Crawl, and Search operations. **Output Format** is one of `markdown` (default), `json`, `chunks`, `html`, or `links` — `json` and `chunks` require Pro+. A **Retry** count (extra re-attempts on target timeouts) is available on Extract, Bulk, and Crawl.
+
 ### Extract
 
 - **Extract URL** — `POST /extract`. One URL in, one Markdown result out per input item.
-  - Fields: `URL`, `Render JavaScript` (Pro+).
+  - Fields: `URL`, `Render JavaScript` (Pro+), `Output Format`, `Retry`, `Compliance Overrides`.
 
 ### Bulk Job
 
-For batches of URLs (Pro and Growth: up to 50 per job; Enterprise: unlimited).
+For batches of URLs (Free: up to 5 per job; Pro: up to 50; Growth: up to 200; Enterprise: unlimited).
 
 - **Submit** — `POST /bulk`. Returns the job envelope (`job_id`, `status: "queued"`, etc.) and continues immediately. Use this when you want to poll later or run other steps in parallel.
 - **Get Status** — `GET /bulk/{job_id}` (polymorphic — also works on crawl job IDs).
 - **Submit and Wait** — submits, then polls every N seconds until done, then **fans the results out as one n8n item per URL** so downstream nodes process each extraction individually.
+  - Fields: `URLs`, `Render JavaScript` (Pro+), `Output Format`, `Retry`, `Compliance Overrides`.
 
 ### Crawl Job
 
-Same three operations against `POST /crawl` / `GET /crawl/{job_id}`. Plan caps: Pro is depth ≤ 5 and ≤ 2,000 pages; Growth is depth ≤ 10 and ≤ 10,000 pages; Enterprise is unlimited. Each crawl job fetches up to 8 pages concurrently.
+Same three operations against `POST /crawl` / `GET /crawl/{job_id}`. Plan caps: Pro is depth ≤ 5 and ≤ 2,000 pages; Growth is depth ≤ 10 and ≤ 10,000 pages; Enterprise is unlimited. Pages are processed concurrently by the API's worker pool.
 
+- Fields: `Root URL`, `Depth`, `Render JavaScript` (Pro+), `Output Format`, `Retry`, `Max Pages`, `Compliance Overrides`. `Max Pages` caps how many pages the crawl bills — it can only narrow your plan's page cap.
 - **Submit and Wait** fans results out as one item per page.
 - The output items include `depth` (BFS distance from the root) and the `truncated` / `truncated_reason` fields when the crawl stopped early.
+
+### Search
+
+- **Search** — `POST /search`. Search the web and extract every result to Markdown in one synchronous call; fans the results out as one n8n item per page. Requires Pro+. Costs `1 + Number of Results` requests.
+  - Fields: `Query`, `Number of Results` (1–10, default 5), `Render JavaScript` (Pro+), `Output Format`, `Compliance Overrides`.
 
 ### Account
 
