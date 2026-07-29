@@ -422,8 +422,13 @@ export class WellMarked implements INodeType {
 				name: 'numResults',
 				type: 'number',
 				default: 5,
-				typeOptions: { minValue: 1, maxValue: 10 },
-				description: 'How many results to fetch and extract (1–10)',
+				// No maxValue: the cap is the account's PLAN, which the node can't
+				// see. Bounding it here would block a Growth user from asking for
+				// the 50 they're entitled to; over-asking returns a 422 naming the
+				// actual cap instead.
+				typeOptions: { minValue: 1 },
+				description:
+					'How many results to fetch and extract. Capped by plan: Free 5, Pro 10, Growth 50, Enterprise uncapped',
 				displayOptions: { show: { resource: ['search'], operation: ['search'] } },
 			},
 			{
