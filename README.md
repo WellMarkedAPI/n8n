@@ -58,7 +58,7 @@ Same three operations against `POST /crawl` / `GET /crawl/{job_id}`. Plan caps: 
 
 ### Search
 
-- **Search** — `POST /search`. Search the web and extract every result to Markdown in one synchronous call; fans the results out as one n8n item per page. Requires Pro+. Costs `1 + Number of Results` requests.
+- **Search** — `POST /search`. Search the web and extract every result to Markdown in one synchronous call; fans the results out as one n8n item per page. Available on every plan; **Number of Results** is capped by plan (Free 5 · Pro 10 · Growth 50 · Enterprise uncapped). Costs `1 + Number of Results` requests.
   - Fields: `Query`, `Number of Results` (1–10, default 5), `Render JavaScript` (Pro+), `Output Format`, `Compliance Overrides`.
 
 ### Account
