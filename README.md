@@ -4,6 +4,8 @@
 
 Official **n8n community node** for the [WellMarked](https://wellmarked.io) API — extract clean Markdown from any URL, crawl whole sites, run bulk jobs, and search the web from inside an n8n workflow.
 
+📖 **[Node documentation](https://wellmarked.io/docs/sdks/n8n)** · [API reference](https://wellmarked.io/docs/api/extraction/extract) · [Errors](https://wellmarked.io/docs/guides/errors)
+
 ## Install
 
 In your n8n instance:
@@ -82,7 +84,7 @@ This node does **not yet** expose a `Webhook URL` field on the Submit operations
 3. The first response carries `webhook_signing_secret` (shown once — store it as an n8n credential or env var).
 4. In the webhook trigger's downstream flow, verify `X-WellMarked-Signature` against your stored secret before acting on the payload.
 
-See the [WellMarked Webhooks docs](https://wellmarked.io/docs#webhooks) for the signature scheme, retry policy, and payload shape.
+See the [WellMarked Webhooks docs](https://wellmarked.io/docs/guides/webhooks) for the signature scheme, retry policy, and payload shape.
 
 ## Errors
 
