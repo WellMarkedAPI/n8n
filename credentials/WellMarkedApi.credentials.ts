@@ -10,7 +10,7 @@ export class WellMarkedApi implements ICredentialType {
 
 	displayName = 'WellMarked API';
 
-	documentationUrl = 'https://wellmarked.io/docs#authentication';
+	documentationUrl = 'https://wellmarked.io/docs/authentication';
 
 	properties: INodeProperties[] = [
 		{
